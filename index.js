@@ -1,10 +1,13 @@
 const express = require('express');
+const cors = require('cors'); // Добавляем CORS
+
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.use(cors());              // Включаем CORS
 app.use(express.json());
 
-// Хранилище сотрудников
+// Памятное хранилище сотрудников
 let employees = [
   {
     id: 1,
@@ -17,12 +20,12 @@ let employees = [
   }
 ];
 
-// Получить всех сотрудников (списком, без дерева)
+// 📄 Получить всех сотрудников (плоским списком)
 app.get('/employees', (req, res) => {
   res.json(employees);
 });
 
-// Добавить нового сотрудника
+// ➕ Добавить нового сотрудника
 app.post('/employees', (req, res) => {
   const { name, parentId, role } = req.body;
   if (!name) return res.status(400).json({ error: 'Имя обязательно' });
@@ -41,7 +44,7 @@ app.post('/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// Обновить сотрудника
+// 🖊 Обновить данные сотрудника
 app.put('/employees/:id', (req, res) => {
   const id = Number(req.params.id);
   const { name, parentId, status, role } = req.body;
@@ -57,7 +60,7 @@ app.put('/employees/:id', (req, res) => {
   res.json({ message: 'Сотрудник обновлён', employee: emp });
 });
 
-// Добавить задачу
+// ✅ Добавить задачу
 app.post('/employees/:id/tasks', (req, res) => {
   const id = Number(req.params.id);
   const { task } = req.body;
@@ -69,7 +72,7 @@ app.post('/employees/:id/tasks', (req, res) => {
   res.json(emp.tasks);
 });
 
-// Изменить статус задачи
+// 🔁 Изменить статус задачи
 app.put('/employees/:id/tasks/:index', (req, res) => {
   const id = Number(req.params.id);
   const index = Number(req.params.index);
@@ -84,7 +87,7 @@ app.put('/employees/:id/tasks/:index', (req, res) => {
   res.json(emp.tasks[index]);
 });
 
-// Удалить задачу
+// 🗑 Удалить задачу
 app.delete('/employees/:id/tasks/:index', (req, res) => {
   const id = Number(req.params.id);
   const index = Number(req.params.index);
@@ -97,7 +100,7 @@ app.delete('/employees/:id/tasks/:index', (req, res) => {
   res.json(emp.tasks);
 });
 
-// Отправить сообщение сотруднику
+// 📩 Отправить сообщение сотруднику
 app.post('/employees/:id/message', (req, res) => {
   const toId = Number(req.params.id);
   const { fromId, text } = req.body;
@@ -118,7 +121,7 @@ app.post('/employees/:id/message', (req, res) => {
   res.json({ message: 'Сообщение отправлено' });
 });
 
-// Получить сообщения
+// 📨 Получить сообщения
 app.get('/employees/:id/messages', (req, res) => {
   const id = Number(req.params.id);
   const emp = employees.find(e => e.id === id);
@@ -128,7 +131,7 @@ app.get('/employees/:id/messages', (req, res) => {
   res.json(emp.messages);
 });
 
-// Запуск сервера
+// 🚀 Запуск сервера
 app.listen(port, () => {
   console.log(`✅ Сервер работает на http://localhost:${port}`);
 });
