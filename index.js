@@ -18,11 +18,11 @@ let employees = [
   }
 ];
 
-// 🔍 Поиск сотрудника по ID (в любом уровне)
-function findEmployeeById(list, id) {
-  for (const emp of list) {
+// 🔍 Поиск сотрудника по ID в дереве
+function findEmployeeById(tree, id) {
+  for (const emp of tree) {
     if (emp.id === id) return emp;
-    if (emp.children?.length) {
+    if (emp.children) {
       const found = findEmployeeById(emp.children, id);
       if (found) return found;
     }
@@ -30,7 +30,20 @@ function findEmployeeById(list, id) {
   return null;
 }
 
-// Добавить сотрудника
+// ✅ Получить весь список (в виде дерева)
+app.get('/employees', (req, res) => {
+  res.json(employees);
+});
+
+// ✅ Получить одного сотрудника по ID
+app.get('/employees/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const emp = findEmployeeById(employees, id);
+  if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
+  res.json(emp);
+});
+
+// ✅ Добавить сотрудника
 app.post('/employees', (req, res) => {
   const { name, role, parentId } = req.body;
   if (!name) return res.status(400).json({ error: 'Имя обязательно' });
@@ -56,12 +69,7 @@ app.post('/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// Получить дерево сотрудников
-app.get('/employees', (req, res) => {
-  res.json(employees);
-});
-
-// Обновить сотрудника
+// ✅ Обновить сотрудника
 app.put('/employees/:id', (req, res) => {
   const { name, status, role } = req.body;
   const emp = findEmployeeById(employees, Number(req.params.id));
@@ -74,7 +82,7 @@ app.put('/employees/:id', (req, res) => {
   res.json({ message: 'Сотрудник обновлён', employee: emp });
 });
 
-// Добавить задачу
+// ✅ Добавить задачу
 app.post('/employees/:id/tasks', (req, res) => {
   const { task } = req.body;
   const emp = findEmployeeById(employees, Number(req.params.id));
@@ -84,28 +92,30 @@ app.post('/employees/:id/tasks', (req, res) => {
   res.json(emp.tasks);
 });
 
-// Изменить статус задачи
+// ✅ Изменить статус задачи
 app.put('/employees/:id/tasks/:index', (req, res) => {
   const { done } = req.body;
   const emp = findEmployeeById(employees, Number(req.params.id));
-  if (!emp || !emp.tasks[req.params.index])
+  const index = Number(req.params.index);
+  if (!emp || !emp.tasks[index])
     return res.status(404).json({ error: 'Сотрудник или задача не найдены' });
 
-  emp.tasks[req.params.index].done = !!done;
-  res.json(emp.tasks[req.params.index]);
+  emp.tasks[index].done = !!done;
+  res.json(emp.tasks[index]);
 });
 
-// Удалить задачу
+// ✅ Удалить задачу
 app.delete('/employees/:id/tasks/:index', (req, res) => {
   const emp = findEmployeeById(employees, Number(req.params.id));
-  if (!emp || !emp.tasks[req.params.index])
+  const index = Number(req.params.index);
+  if (!emp || !emp.tasks[index])
     return res.status(404).json({ error: 'Сотрудник или задача не найдены' });
 
-  emp.tasks.splice(req.params.index, 1);
+  emp.tasks.splice(index, 1);
   res.json(emp.tasks);
 });
 
-// Отправить сообщение
+// ✅ Отправить сообщение
 app.post('/employees/:id/message', (req, res) => {
   const toEmp = findEmployeeById(employees, Number(req.params.id));
   const fromEmp = findEmployeeById(employees, req.body.fromId);
@@ -113,7 +123,7 @@ app.post('/employees/:id/message', (req, res) => {
 
   const canSend =
     fromEmp.id === 1 || // Boss
-    isChildOf(toEmp, fromEmp.id); // Родитель
+    isChildOf(toEmp, fromEmp.id); // Прямой родитель
 
   if (!canSend) return res.status(403).json({ error: 'Нет прав на отправку' });
 
@@ -121,24 +131,24 @@ app.post('/employees/:id/message', (req, res) => {
   res.json({ message: 'Сообщение отправлено' });
 });
 
-// Получить сообщения
+// ✅ Получить сообщения
 app.get('/employees/:id/messages', (req, res) => {
   const emp = findEmployeeById(employees, Number(req.params.id));
   if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-
   res.json(emp.messages);
 });
 
-// Проверка на подчинённость
+// 🔄 Проверка: является ли target подчинённым parentId
 function isChildOf(target, parentId) {
-  if (target.id === parentId) return false;
   const parent = findEmployeeById(employees, parentId);
-  return parent?.children?.some(child => {
-    return child.id === target.id || isChildOf(child, target.id);
-  });
+  if (!parent) return false;
+
+  return parent.children?.some(child =>
+    child.id === target.id || isChildOf(child, target.id)
+  );
 }
 
-// Запуск сервера
+// 🚀 Запуск сервера
 app.listen(port, () => {
-  console.log(`✅ Сервер работает на http://localhost:${port}`);
+  console.log(`✅ Сервер запущен на http://localhost:${port}`);
 });
