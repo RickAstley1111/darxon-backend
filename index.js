@@ -4,7 +4,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Временное хранилище сотрудников (вместо базы)
+// Простая in-memory база
 let employees = [
   {
     id: 1,
@@ -17,7 +17,7 @@ let employees = [
   }
 ];
 
-// Построение иерархии сотрудников
+// Построение дерева сотрудников
 function buildTree(parentId = null) {
   return employees
     .filter(emp => emp.parentId === parentId)
@@ -75,8 +75,23 @@ app.post('/employees/:id/tasks', (req, res) => {
   const emp = employees.find(e => e.id === id);
   if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
 
-  emp.tasks.push(task);
+  emp.tasks.push({ text: task, done: false });
   res.json(emp.tasks);
+});
+
+// ✅ Изменить статус задачи (done)
+app.put('/employees/:id/tasks/:index', (req, res) => {
+  const id = Number(req.params.id);
+  const index = Number(req.params.index);
+  const { done } = req.body;
+
+  const emp = employees.find(e => e.id === id);
+  if (!emp || !emp.tasks[index]) {
+    return res.status(404).json({ error: 'Сотрудник или задача не найдены' });
+  }
+
+  emp.tasks[index].done = !!done;
+  res.json(emp.tasks[index]);
 });
 
 // Удалить задачу
@@ -102,7 +117,6 @@ app.post('/employees/:id/message', (req, res) => {
 
   if (!toEmp || !fromEmp) return res.status(404).json({ error: 'Сотрудник не найден' });
 
-  // Boss может всем, остальные — только своим подчинённым
   const isBoss = fromEmp.parentId === null;
   const isParent = toEmp.parentId === fromEmp.id;
 
@@ -124,7 +138,7 @@ app.get('/employees/:id/messages', (req, res) => {
   res.json(emp.messages);
 });
 
-// Запуск сервера
+// Запустить сервер
 app.listen(port, () => {
-  console.log(`✅ Сервер запущен: http://localhost:${port}`);
+  console.log(`✅ Сервер работает: http://localhost:${port}`);
 });
