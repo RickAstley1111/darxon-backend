@@ -4,12 +4,20 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Примерная база данных в памяти
+// Временное хранилище сотрудников (вместо базы)
 let employees = [
-  { id: 1, name: 'Boss', parentId: null, status: 'absent', tasks: [], messages: [] }
+  {
+    id: 1,
+    name: 'Boss',
+    parentId: null,
+    status: 'absent',
+    role: 'admin',
+    tasks: [],
+    messages: []
+  }
 ];
 
-// Построить иерархию
+// Построение иерархии сотрудников
 function buildTree(parentId = null) {
   return employees
     .filter(emp => emp.parentId === parentId)
@@ -24,9 +32,9 @@ app.get('/employees', (req, res) => {
   res.json(buildTree());
 });
 
-// Добавить сотрудника
+// Добавить нового сотрудника
 app.post('/employees', (req, res) => {
-  const { name, parentId } = req.body;
+  const { name, parentId, role } = req.body;
   if (!name) return res.status(400).json({ error: 'Имя обязательно' });
 
   const newEmp = {
@@ -34,6 +42,7 @@ app.post('/employees', (req, res) => {
     name,
     parentId: parentId || null,
     status: 'absent',
+    role: role || 'employee',
     tasks: [],
     messages: []
   };
@@ -42,44 +51,48 @@ app.post('/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// Изменить статус сотрудника
-app.put('/employees/:id/status', (req, res) => {
+// ✅ Обновить данные сотрудника полностью
+app.put('/employees/:id', (req, res) => {
   const id = Number(req.params.id);
-  const { status } = req.body;
-
-  if (!['present', 'absent'].includes(status)) {
-    return res.status(400).json({ error: 'Статус должен быть: present или absent' });
-  }
+  const { name, parentId, status, role } = req.body;
 
   const emp = employees.find(e => e.id === id);
   if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
 
-  emp.status = status;
-  res.json({ message: 'Статус обновлён', employee: emp });
+  if (name !== undefined) emp.name = name;
+  if (parentId !== undefined) emp.parentId = parentId;
+  if (status !== undefined && ['present', 'absent'].includes(status)) emp.status = status;
+  if (role !== undefined) emp.role = role;
+
+  res.json({ message: 'Сотрудник обновлён', employee: emp });
 });
 
-// Добавление задачи сотруднику
+// Добавить задачу сотруднику
 app.post('/employees/:id/tasks', (req, res) => {
   const id = Number(req.params.id);
   const { task } = req.body;
+
   const emp = employees.find(e => e.id === id);
   if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
+
   emp.tasks.push(task);
   res.json(emp.tasks);
 });
 
-// Удаление задачи
+// Удалить задачу
 app.delete('/employees/:id/tasks/:index', (req, res) => {
   const id = Number(req.params.id);
   const index = Number(req.params.index);
+
   const emp = employees.find(e => e.id === id);
   if (!emp || index >= emp.tasks.length)
-    return res.status(404).json({ error: 'Задача или сотрудник не найдены' });
+    return res.status(404).json({ error: 'Сотрудник или задача не найдены' });
+
   emp.tasks.splice(index, 1);
   res.json(emp.tasks);
 });
 
-// Отправка сообщения сотруднику
+// Отправить сообщение сотруднику
 app.post('/employees/:id/message', (req, res) => {
   const toId = Number(req.params.id);
   const { fromId, text } = req.body;
@@ -89,7 +102,7 @@ app.post('/employees/:id/message', (req, res) => {
 
   if (!toEmp || !fromEmp) return res.status(404).json({ error: 'Сотрудник не найден' });
 
-  // Только Boss или прямой руководитель
+  // Boss может всем, остальные — только своим подчинённым
   const isBoss = fromEmp.parentId === null;
   const isParent = toEmp.parentId === fromEmp.id;
 
@@ -101,15 +114,17 @@ app.post('/employees/:id/message', (req, res) => {
   res.json({ message: 'Сообщение отправлено' });
 });
 
-// Получение сообщений
+// Получить сообщения сотрудника
 app.get('/employees/:id/messages', (req, res) => {
   const id = Number(req.params.id);
   const emp = employees.find(e => e.id === id);
+
   if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
+
   res.json(emp.messages);
 });
 
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`✅ Сервер запущен на http://localhost:${port}`);
+  console.log(`✅ Сервер запущен: http://localhost:${port}`);
 });
