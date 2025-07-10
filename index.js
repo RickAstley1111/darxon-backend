@@ -4,7 +4,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Простая in-memory база
+// Хранилище сотрудников
 let employees = [
   {
     id: 1,
@@ -17,19 +17,9 @@ let employees = [
   }
 ];
 
-// Построение дерева сотрудников
-function buildTree(parentId = null) {
-  return employees
-    .filter(emp => emp.parentId === parentId)
-    .map(emp => ({
-      ...emp,
-      children: buildTree(emp.id)
-    }));
-}
-
-// Получить всех сотрудников
+// Получить всех сотрудников (списком, без дерева)
 app.get('/employees', (req, res) => {
-  res.json(buildTree());
+  res.json(employees);
 });
 
 // Добавить нового сотрудника
@@ -51,7 +41,7 @@ app.post('/employees', (req, res) => {
   res.status(201).json(newEmp);
 });
 
-// ✅ Обновить данные сотрудника полностью
+// Обновить сотрудника
 app.put('/employees/:id', (req, res) => {
   const id = Number(req.params.id);
   const { name, parentId, status, role } = req.body;
@@ -67,7 +57,7 @@ app.put('/employees/:id', (req, res) => {
   res.json({ message: 'Сотрудник обновлён', employee: emp });
 });
 
-// Добавить задачу сотруднику
+// Добавить задачу
 app.post('/employees/:id/tasks', (req, res) => {
   const id = Number(req.params.id);
   const { task } = req.body;
@@ -79,7 +69,7 @@ app.post('/employees/:id/tasks', (req, res) => {
   res.json(emp.tasks);
 });
 
-// ✅ Изменить статус задачи (done)
+// Изменить статус задачи
 app.put('/employees/:id/tasks/:index', (req, res) => {
   const id = Number(req.params.id);
   const index = Number(req.params.index);
@@ -128,7 +118,7 @@ app.post('/employees/:id/message', (req, res) => {
   res.json({ message: 'Сообщение отправлено' });
 });
 
-// Получить сообщения сотрудника
+// Получить сообщения
 app.get('/employees/:id/messages', (req, res) => {
   const id = Number(req.params.id);
   const emp = employees.find(e => e.id === id);
@@ -138,7 +128,7 @@ app.get('/employees/:id/messages', (req, res) => {
   res.json(emp.messages);
 });
 
-// Запустить сервер
+// Запуск сервера
 app.listen(port, () => {
-  console.log(`✅ Сервер работает: http://localhost:${port}`);
+  console.log(`✅ Сервер работает на http://localhost:${port}`);
 });
