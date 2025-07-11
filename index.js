@@ -1,209 +1,96 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const app = express();
-const port = process.env.PORT || 3000;
+const express = require('express')
+const mongoose = require('mongoose')
+const cors = require('cors')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 
-app.use(cors());
-app.use(express.json());
+const User = require('./models/User')
+const Employee = require('./models/Employee')
 
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => console.log('✅ MongoDB подключен'))
-  .catch(err => console.error('❌ Ошибка MongoDB:', err));
+const app = express()
+app.use(cors())
+app.use(express.json())
 
-const TaskSchema = new mongoose.Schema({
-  text: String,
-  done: { type: Boolean, default: false }
-});
+const JWT_SECRET = 'supersecret' // поменяй на свой
 
-const MessageSchema = new mongoose.Schema({
-  from: Number,
-  text: String
-});
+mongoose.connect('your_mongo_uri_here')
+    .then(() => console.log("Mongo connected"))
+    .catch((err) => console.log("Mongo error:", err))
 
-const EmployeeSchema = new mongoose.Schema({
-  id: { type: Number, unique: true },
-  name: String,
-  role: String,
-  status: String,
-  parentId: Number,
-  tasks: [TaskSchema],
-  messages: [MessageSchema]
-});
+// Middleware для проверки токена
+const auth = async (req, res, next) => {
+    const token = req.headers.authorization?.split(" ")[1]
+    if (!token) return res.status(401).json({ error: "No token" })
 
-const Employee = mongoose.model('Employee', EmployeeSchema);
-
-// Генерация ID
-const generateId = async () => {
-  const last = await Employee.find().sort({ id: -1 }).limit(1);
-  return last[0]?.id + 1 || 1;
-};
-
-// 🔹 Получить всех сотрудников
-app.get('/employees', async (req, res) => {
-  try {
-    const employees = await Employee.find();
-    res.json(employees);
-  } catch (err) {
-    console.error('Ошибка /employees:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Получить одного по id
-app.get('/employees/:id', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-    res.json(emp);
-  } catch (err) {
-    console.error('Ошибка /employees/:id:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Добавить сотрудника
-app.post('/employees', async (req, res) => {
-  try {
-    const { name, role = 'employee', parentId = null } = req.body;
-    const newEmp = new Employee({
-      id: await generateId(),
-      name,
-      role,
-      status: 'absent',
-      parentId,
-      tasks: [],
-      messages: []
-    });
-    await newEmp.save();
-    res.status(201).json(newEmp);
-  } catch (err) {
-    console.error('Ошибка при добавлении:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Обновить сотрудника
-app.put('/employees/:id', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-
-    const { name, role, status } = req.body;
-    if (name !== undefined) emp.name = name;
-    if (role !== undefined) emp.role = role;
-    if (status !== undefined) emp.status = status;
-
-    await emp.save();
-    res.json(emp);
-  } catch (err) {
-    console.error('Ошибка при обновлении:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Удалить сотрудника
-app.delete('/employees/:id', async (req, res) => {
-  try {
-    const emp = await Employee.findOneAndDelete({ id: Number(req.params.id) });
-    if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-    res.json({ message: 'Удалён' });
-  } catch (err) {
-    console.error('Ошибка при удалении:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Добавить задачу
-app.post('/employees/:id/tasks', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-
-    emp.tasks.push({ text: req.body.task, done: false });
-    await emp.save();
-    res.json(emp.tasks);
-  } catch (err) {
-    console.error('Ошибка при добавлении задачи:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Изменить статус задачи
-app.put('/employees/:id/tasks/:index', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    const index = Number(req.params.index);
-    if (!emp || !emp.tasks[index])
-      return res.status(404).json({ error: 'Задача или сотрудник не найдены' });
-
-    emp.tasks[index].done = !!req.body.done;
-    await emp.save();
-    res.json(emp.tasks[index]);
-  } catch (err) {
-    console.error('Ошибка при обновлении задачи:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Удалить задачу
-app.delete('/employees/:id/tasks/:index', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    const index = Number(req.params.index);
-    if (!emp || !emp.tasks[index])
-      return res.status(404).json({ error: 'Задача или сотрудник не найдены' });
-
-    emp.tasks.splice(index, 1);
-    await emp.save();
-    res.json(emp.tasks);
-  } catch (err) {
-    console.error('Ошибка при удалении задачи:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
-
-// 🔹 Отправка сообщения
-app.post('/employees/:id/message', async (req, res) => {
-  try {
-    const toId = Number(req.params.id);
-    const { fromId, text } = req.body;
-
-    const toEmp = await Employee.findOne({ id: toId });
-    const fromEmp = await Employee.findOne({ id: fromId });
-
-    if (!toEmp || !fromEmp) return res.status(404).json({ error: 'Сотрудник не найден' });
-
-    const isBoss = fromEmp.parentId === null;
-    const isParent = toEmp.parentId === fromEmp.id;
-
-    if (!(isBoss || isParent)) {
-      return res.status(403).json({ error: 'Нет прав на отправку' });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET)
+        req.user = decoded
+        next()
+    } catch {
+        res.status(401).json({ error: "Invalid token" })
     }
+}
 
-    toEmp.messages.push({ from: fromId, text });
-    await toEmp.save();
-    res.json({ message: 'Сообщение отправлено' });
-  } catch (err) {
-    console.error('Ошибка при отправке сообщения:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
+// РЕГИСТРАЦИЯ
+app.post('/auth/register', async (req, res) => {
+    const { username, password } = req.body
+    const hashed = await bcrypt.hash(password, 10)
 
-// 🔹 Получить сообщения
-app.get('/employees/:id/messages', async (req, res) => {
-  try {
-    const emp = await Employee.findOne({ id: Number(req.params.id) });
-    if (!emp) return res.status(404).json({ error: 'Сотрудник не найден' });
-    res.json(emp.messages);
-  } catch (err) {
-    console.error('Ошибка при получении сообщений:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
+    try {
+        const user = await User.create({ username, password: hashed })
+        res.json({ message: "Registered", userId: user._id })
+    } catch (e) {
+        res.status(400).json({ error: "Username already exists" })
+    }
+})
 
-app.listen(port, () => {
-  console.log(`🚀 Сервер запущен на http://localhost:${port}`);
-});
+// ЛОГИН
+app.post('/auth/login', async (req, res) => {
+    const { username, password } = req.body
+    const user = await User.findOne({ username })
+    if (!user) return res.status(401).json({ error: "Invalid" })
+
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) return res.status(401).json({ error: "Wrong password" })
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET)
+    res.json({ token })
+})
+
+// ВСЕ СОТРУДНИКИ (только текущего пользователя)
+app.get('/employees', auth, async (req, res) => {
+    const employees = await Employee.find({ userId: req.user.id })
+    res.json(employees)
+})
+
+// ОДИН СОТРУДНИК
+app.get('/employees/:id', auth, async (req, res) => {
+    const emp = await Employee.findOne({ _id: req.params.id, userId: req.user.id })
+    if (!emp) return res.status(404).json({ error: "Not found" })
+    res.json(emp)
+})
+
+// СОЗДАНИЕ СОТРУДНИКА
+app.post('/employees', auth, async (req, res) => {
+    const newEmp = await Employee.create({ ...req.body, userId: req.user.id })
+    res.json(newEmp)
+})
+
+// УДАЛЕНИЕ
+app.delete('/employees/:id', auth, async (req, res) => {
+    await Employee.deleteOne({ _id: req.params.id, userId: req.user.id })
+    res.json({ message: "Deleted" })
+})
+
+// РЕДАКТИРОВАНИЕ
+app.put('/employees/:id', auth, async (req, res) => {
+    const updated = await Employee.findOneAndUpdate(
+        { _id: req.params.id, userId: req.user.id },
+        req.body,
+        { new: true }
+    )
+    res.json(updated)
+})
+
+const PORT = process.env.PORT || 10000
+app.listen(PORT, () => console.log("Server started on port", PORT))
