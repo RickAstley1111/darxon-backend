@@ -1,12 +1,16 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 
 const employeeSchema = new mongoose.Schema({
-    name: String,
-    role: String,
-    status: { type: String, default: "пришел" },
-    parentId: String,
-    tasks: [{ text: String }],
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" } // связь с владельцем
-})
+  name: String,
+  role: String,
+  parentId: String,
+  status: { type: String, default: "пришёл" },
+  tasks: [
+    {
+      text: String,
+      completed: Boolean
+    }
+  ]
+});
 
-module.exports = mongoose.model("Employee", employeeSchema)
+module.exports = mongoose.model('Employee', employeeSchema);
