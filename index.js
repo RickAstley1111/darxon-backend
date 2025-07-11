@@ -103,5 +103,13 @@ app.put("/me/email", authenticate, async (req, res) => {
   res.json({ message: "Email updated" });
 });
 
+// Change own password
+app.put("/me/password", authenticate, async (req, res) => {
+  const { password } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  await User.findByIdAndUpdate(req.user.id, { password: hash });
+  res.json({ message: "Password updated" });
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
