@@ -1,10 +1,9 @@
-require("dotenv").config();
-
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+require("dotenv").config(); // ЗАГРУЖАЕТ .env
 
 const Employee = require("./models/Employee");
 const User = require("./models/User");
@@ -13,12 +12,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ✅ ПОДКЛЮЧЕНИЕ К MONGODB ИЗ .env
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log("MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.log("❌ MongoDB connection error:", err));
 
-// Middleware: Check JWT
+// Middleware: JWT аутентификация
 const authenticate = async (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token provided" });
@@ -31,7 +31,7 @@ const authenticate = async (req, res, next) => {
   }
 };
 
-// Create initial boss account manually
+// ✅ СОЗДАНИЕ БОССА (только 1 раз)
 app.post("/register-boss", async (req, res) => {
   const { email, password, name, role } = req.body;
   try {
@@ -44,7 +44,7 @@ app.post("/register-boss", async (req, res) => {
   }
 });
 
-// Login
+// 🔑 ЛОГИН
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -59,7 +59,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// Create employee (boss only)
+// ➕ ДОБАВЛЕНИЕ СОТРУДНИКА (только боссы)
 app.post("/employees", authenticate, async (req, res) => {
   const { name, role, parentId, email, password } = req.body;
   try {
@@ -72,39 +72,39 @@ app.post("/employees", authenticate, async (req, res) => {
   }
 });
 
-// Get all employees
+// 📄 ПОЛУЧИТЬ ВСЕХ
 app.get("/employees", async (req, res) => {
   const emps = await Employee.find();
   res.json(emps);
 });
 
-// Get employee by id
+// 📄 ПОЛУЧИТЬ ОДНОГО
 app.get("/employees/:id", async (req, res) => {
   const emp = await Employee.findById(req.params.id);
   res.json(emp);
 });
 
-// Update employee
+// ✏️ ОБНОВИТЬ СОТРУДНИКА
 app.put("/employees/:id", authenticate, async (req, res) => {
   const emp = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
   res.json(emp);
 });
 
-// Delete employee
+// ❌ УДАЛИТЬ СОТРУДНИКА (и аккаунт)
 app.delete("/employees/:id", authenticate, async (req, res) => {
   const emp = await Employee.findByIdAndDelete(req.params.id);
   if (emp?.userId) await User.findByIdAndDelete(emp.userId);
   res.json({ message: "Deleted", emp });
 });
 
-// Change own email
+// ✉️ ИЗМЕНИТЬ СВОЙ EMAIL
 app.put("/me/email", authenticate, async (req, res) => {
   const { email } = req.body;
   await User.findByIdAndUpdate(req.user.id, { email });
   res.json({ message: "Email updated" });
 });
 
-// Change own password
+// 🔑 ИЗМЕНИТЬ СВОЙ ПАРОЛЬ
 app.put("/me/password", authenticate, async (req, res) => {
   const { password } = req.body;
   const hash = await bcrypt.hash(password, 10);
@@ -112,5 +112,6 @@ app.put("/me/password", authenticate, async (req, res) => {
   res.json({ message: "Password updated" });
 });
 
+// ✅ ЗАПУСК СЕРВЕРА
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
