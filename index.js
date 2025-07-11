@@ -1,81 +1,107 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const Employee = require('./models/Employee');
-const User = require('./models/User');
-const bcrypt = require('bcrypt');
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+
+const Employee = require("./models/Employee");
+const User = require("./models/User");
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect("your_mongo_connection_string")
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.log("❌ MongoDB connection error:", err));
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log("MongoDB connection error:", err));
 
-// Создание сотрудника и пользователя
-app.post('/employees', async (req, res) => {
+// Middleware: Check JWT
+const authenticate = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token provided" });
   try {
-    const { name, role, parentId, email, password } = req.body;
-
-    const employee = await Employee.create({
-      name,
-      role,
-      parentId: parentId || null,
-      status: "пришёл",
-      tasks: []
-    });
-
-    await User.create({
-      email,
-      password,
-      role,
-      employeeId: employee._id
-    });
-
-    res.status(201).json(employee);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
   } catch (err) {
-    console.error("Ошибка при создании сотрудника:", err);
-    res.status(500).json({ error: "Ошибка сервера при создании сотрудника" });
+    return res.status(403).json({ error: "Invalid token" });
+  }
+};
+
+// Create initial boss account manually
+app.post("/register-boss", async (req, res) => {
+  const { email, password, name, role } = req.body;
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const user = await User.create({ email, password: hash });
+    const boss = await Employee.create({ name, role, status: "пришёл", userId: user._id });
+    res.json({ message: "Boss registered", boss });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Получить всех сотрудников
-app.get('/employees', async (req, res) => {
-  try {
-    const employees = await Employee.find();
-    res.json(employees);
-  } catch (err) {
-    res.status(500).json({ error: "Ошибка при получении сотрудников" });
-  }
-});
-
-// Получить сотрудника по id
-app.get('/employees/:id', async (req, res) => {
-  try {
-    const emp = await Employee.findById(req.params.id);
-    res.json(emp);
-  } catch (err) {
-    res.status(500).json({ error: "Ошибка при получении сотрудника" });
-  }
-});
-
-// 🔐 Авторизация
-app.post('/login', async (req, res) => {
+// Login
+app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "Пользователь не найден" });
-
+    if (!user) return res.status(400).json({ error: "User not found" });
     const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: "Неверный пароль" });
-
-    res.json({ message: "Успешный вход", user });
+    if (!match) return res.status(400).json({ error: "Wrong password" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    res.json({ token });
   } catch (err) {
-    res.status(500).json({ error: "Ошибка при входе" });
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Сервер запущен на http://localhost:${PORT}`));
+// Create employee (boss only)
+app.post("/employees", authenticate, async (req, res) => {
+  const { name, role, parentId, email, password } = req.body;
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const user = await User.create({ email, password: hash });
+    const emp = await Employee.create({ name, role, parentId, status: "пришёл", userId: user._id });
+    res.json(emp);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all employees
+app.get("/employees", async (req, res) => {
+  const emps = await Employee.find();
+  res.json(emps);
+});
+
+// Get employee by id
+app.get("/employees/:id", async (req, res) => {
+  const emp = await Employee.findById(req.params.id);
+  res.json(emp);
+});
+
+// Update employee
+app.put("/employees/:id", authenticate, async (req, res) => {
+  const emp = await Employee.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  res.json(emp);
+});
+
+// Delete employee
+app.delete("/employees/:id", authenticate, async (req, res) => {
+  const emp = await Employee.findByIdAndDelete(req.params.id);
+  if (emp?.userId) await User.findByIdAndDelete(emp.userId);
+  res.json({ message: "Deleted", emp });
+});
+
+// Change own email
+app.put("/me/email", authenticate, async (req, res) => {
+  const { email } = req.body;
+  await User.findByIdAndUpdate(req.user.id, { email });
+  res.json({ message: "Email updated" });
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
